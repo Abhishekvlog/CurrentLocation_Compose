@@ -1,28 +1,17 @@
 package com.example.currentlocation.data.local
 
-import android.content.Context
 import androidx.room.Database
-import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.example.currentlocation.data.local.city.CityDao
+import com.example.currentlocation.data.local.city.CityEntity
+import com.example.currentlocation.data.local.patient.PatientDao
+import com.example.currentlocation.data.local.patient.PatientEntity
+import com.example.currentlocation.data.local.state.StateDao
+import com.example.currentlocation.data.local.state.StateEntity
 
-@Database(entities = [StateEntity::class], version = 1)
+@Database(entities = [StateEntity::class, CityEntity::class, PatientEntity::class], version = 1)
 abstract class StateDatabase : RoomDatabase() {
-    abstract val dao: StateDao
-//    companion object {
-//        private var instance: StateDatabase? = null
-//        fun getSessionDatabase(context: Context): StateDatabase {
-//            if (instance != null) {
-//                return instance!!
-//            } else {
-//                val builder = Room.databaseBuilder(
-//                    context.applicationContext,
-//                    StateDatabase::class.java,
-//                    "state_db"
-//                )
-//                builder.fallbackToDestructiveMigration()
-//                instance = builder.build()
-//            }
-//            return instance!!
-//        }
-//    }
+    abstract val stateDao: StateDao
+    abstract val cityDao: CityDao
+    abstract val patientDao: PatientDao
 }

@@ -1,4 +1,4 @@
-package com.example.currentlocation.data.local
+package com.example.currentlocation.data.local.state
 
 import androidx.room.*
 
@@ -10,4 +10,7 @@ interface StateDao {
 
     @Query("SELECT * FROM state_table")
     suspend fun getState(): List<StateEntity>
+
+    @Query("SELECT * FROM state_table where state = :state")
+    suspend fun getStateId(state : String) : StateEntity
 }

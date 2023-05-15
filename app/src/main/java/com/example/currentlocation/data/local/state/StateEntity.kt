@@ -1,4 +1,4 @@
-package com.example.currentlocation.data.local
+package com.example.currentlocation.data.local.state
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity

@@ -1,24 +1,21 @@
-package com.example.currentlocation.viewModel
+package com.example.currentlocation.viewModel.state
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.currentlocation.data.local.StateEntity
-import com.example.currentlocation.data.local.StateDao
+import com.example.currentlocation.data.local.state.StateEntity
+import com.example.currentlocation.data.local.state.StateDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class StateViewModel(private val dao : StateDao) : ViewModel() {
 
+    var data = listOf<StateEntity>()
     fun insertState(stateName : String){
         viewModelScope.launch(Dispatchers.IO) {
             dao.insertState(StateEntity(stateName))
         }
     }
-    fun getState(): List<StateEntity> {
-        var data = listOf<StateEntity>()
-        viewModelScope.launch(Dispatchers.IO) {
-            data = dao.getState()
-        }
-        return data
+    suspend fun getState(): List<StateEntity> {
+     return dao.getState()
     }
 }

@@ -30,15 +30,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.room.Room
 import com.example.currentlocation.data.local.StateDatabase
 import com.example.currentlocation.ui.theme.CurrentLocationTheme
 import com.example.currentlocation.viewModel.CountryViewModel
-import com.example.currentlocation.viewModel.StateViewModel
-import com.example.currentlocation.viewModel.StateViewModelFactory
+import com.example.currentlocation.viewModel.city.CityViewModel
+import com.example.currentlocation.viewModel.city.CityViewModelFactory
+import com.example.currentlocation.viewModel.patient.PatientViewModel
+import com.example.currentlocation.viewModel.patient.PatientViewModelFactory
+import com.example.currentlocation.viewModel.state.StateViewModel
+import com.example.currentlocation.viewModel.state.StateViewModelFactory
 import com.google.android.gms.location.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -60,12 +63,16 @@ class MainActivity : ComponentActivity() {
     val mainViewModel: MainViewModel by viewModels<MainViewModel>()
     val countryViewModel by viewModels<CountryViewModel>()
     lateinit var stateViewModel : StateViewModel
-//    val stateViewModel by viewModels<StateViewModel>(factoryProducer = {StateViewModelFactory(db.dao)})
+    lateinit var cityViewModel : CityViewModel
+    lateinit var patientViewModel: PatientViewModel
 
     @SuppressLint("UnrememberedMutableState")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        stateViewModel = ViewModelProvider(this,StateViewModelFactory(db.dao)).get(StateViewModel::class.java)
+        stateViewModel = ViewModelProvider(this, StateViewModelFactory(db.stateDao)).get(StateViewModel::class.java)
+        cityViewModel = ViewModelProvider(this, CityViewModelFactory(db.cityDao)).get(CityViewModel::class.java)
+        patientViewModel = ViewModelProvider(this, PatientViewModelFactory(db.patientDao)).get(PatientViewModel::class.java)
+
         setContent {
             var latitude by remember {
                 mutableStateOf(0.0)
@@ -74,18 +81,7 @@ class MainActivity : ComponentActivity() {
                 mutableStateOf(0.0)
             }
 
-
-
-
-//            countryViewModel.getCities()
-//            countryViewModel.citiesLiveData.observe(this){cities ->
-//                cities.forEach {
-//                    Log.d("cities",it )
-//                }
-//            }
-
             CurrentLocationTheme {
-                // A surface container using the 'background' color from the theme
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colors.background
@@ -101,6 +97,12 @@ class MainActivity : ComponentActivity() {
                                 // Update UI with location data
                                 latitude = lo.latitude
                                 longitude = lo.longitude
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    delay(2000)
+                                    if (!mainViewModel.show.value){
+                                        mainViewModel.getLocation(longitude, latitude, this@MainActivity)
+                                    }
+                                }
                             }
                         }
                     }
@@ -133,11 +135,6 @@ class MainActivity : ComponentActivity() {
                             }) {
                             // Get the location
                             startLocationUpdates()
-                            LaunchedEffect(true) {
-                                delay(1000)
-                                Log.d("abhishek", "onCreate: location fatching start")
-                                mainViewModel.getLocation(longitude, latitude, this@MainActivity)
-                            }
 
                         } else {
                             LaunchedEffect(true) {
@@ -145,19 +142,31 @@ class MainActivity : ComponentActivity() {
                                 launcherMultiplePermissions.launch(permissions)
                             }
                         }
-                        Log.d("sizeCheck", "onCreate ${stateViewModel.getState().size}")
-                        if (stateViewModel.getState().isEmpty()){
-                            countryViewModel.getStates()
-                            countryViewModel.stateLiveData.observe(this@MainActivity) { data ->
-                                lifecycleScope.launch(Dispatchers.IO) {
-                                    data.forEach {
-                                        stateViewModel.insertState(it.name)
-                                        Log.d("abhishek: ", it.name.lowercase())
+                        LaunchedEffect(Unit){
+                            if (stateViewModel.getState().isEmpty()){
+                                Log.d("sizeCheck", "onCreate ${stateViewModel.getState().size}")
+                                countryViewModel.getStates()
+                                countryViewModel.stateLiveData.observe(this@MainActivity) { data ->
+                                    lifecycleScope.launch(Dispatchers.IO) {
+                                        data.forEach {
+                                            stateViewModel.insertState(it.name)
+                                            Log.d("state: ", it.name)
+                                        }
+                                    }
+                                }
+                            }
+                            if (cityViewModel.getCity().isEmpty()){
+                                Log.d("sizeCheck", "onCreate ${cityViewModel.getCity().size}")
+                                countryViewModel.getCities()
+                                delay(3000)
+                                countryViewModel.citiesLiveData.observe(this@MainActivity){cities ->
+                                    cities.forEach {
+                                        cityViewModel.insertCity(it)
+                                        Log.d("cities",it )
                                     }
                                 }
                             }
                         }
-
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -210,15 +219,15 @@ class MainActivity : ComponentActivity() {
                                 .padding(start = 12.dp),
                             horizontalArrangement = Arrangement.SpaceAround
                         ) {
+                            EditField(name = mainViewModel.state.value, hint = "State", 0.45f) {
+                                mainViewModel.state.value = it
+                            }
                             EditField(
                                 name = mainViewModel.pinCode.value,
                                 hint = "Postal code*",
-                                0.45f
+                                0.9f
                             ) {
                                 mainViewModel.pinCode.value = it
-                            }
-                            EditField(name = mainViewModel.state.value, hint = "State", 0.9f) {
-                                mainViewModel.state.value = it
                             }
                         }
                         Spacer(modifier = Modifier.height(16.dp))
@@ -238,10 +247,10 @@ class MainActivity : ComponentActivity() {
                             Spacer(modifier = Modifier.height(16.dp))
                             EditField(
                                 name = mainViewModel.address_2.value,
-                                hint = "Address Line 2r",
+                                hint = "Address Line 2",
                                 size = 1f
                             ) {
-                                mainViewModel.address_2.value = it
+                                mainViewModel.address_2.value= it
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
@@ -270,6 +279,46 @@ class MainActivity : ComponentActivity() {
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             CardButton(name = "Preview") {
+                                if (!mainViewModel.state.value.isEmpty()){
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        val stateId = db.stateDao.getStateId(mainViewModel.state.value)
+                                        val address = mainViewModel.address_2.value
+                                        val cityId = db.cityDao.getCityId(mainViewModel.city.value)
+                                        val pinId = mainViewModel.pinCode.value
+                                        Log.d("patientCheck", "onCreate: stateId - $stateId cityId - $cityId")
+                                        patientViewModel.insertPatientDetails(
+                                            pinCodeId = pinId.toInt(),
+                                            cityId = cityId.id,
+                                            stateId = stateId.id,
+                                            address = address
+                                        )
+                                        mainViewModel.pinCode.value = ""
+                                        mainViewModel.state.value = ""
+                                        mainViewModel.city.value = ""
+                                        mainViewModel.address_2.value = ""
+                                        mainViewModel.fullAddress.value =""
+                                        mainViewModel.district.value =""
+                                        lifecycleScope.launch(Dispatchers.Main){
+                                            Toast.makeText(
+                                                this@MainActivity,
+                                                "Patient data saved",
+                                                Toast.LENGTH_SHORT
+                                            )
+                                                .show()
+                                        }
+
+                                    }
+                                }
+                                else
+                                {
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "Field can't be empty",
+                                        Toast.LENGTH_SHORT
+                                    )
+                                        .show()
+                                }
+
                             }
                         }
 
@@ -279,7 +328,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
     @SuppressLint("MissingPermission")
     private fun startLocationUpdates() {
         locationCallback?.let {
@@ -302,16 +350,11 @@ class MainActivity : ComponentActivity() {
             startLocationUpdates()
         }
     }
-
     override fun onPause() {
         super.onPause()
         locationCallback?.let { fusedLocationClient?.removeLocationUpdates(it) }
     }
-
-
 }
-
-
 @Composable
 fun EditField(name: String, hint: String, size: Float, update: (String) -> Unit) {
 
@@ -332,8 +375,6 @@ fun EditField(name: String, hint: String, size: Float, update: (String) -> Unit)
     )
 
 }
-
-
 @Composable
 fun CardButton(name: String, onClick: () -> Unit) {
     Card(
