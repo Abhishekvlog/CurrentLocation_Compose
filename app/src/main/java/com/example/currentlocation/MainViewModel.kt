@@ -3,7 +3,9 @@ package com.example.currentlocation
 import android.content.Context
 import android.location.Address
 import android.location.Geocoder
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import java.util.*
 
@@ -15,6 +17,7 @@ class MainViewModel : ViewModel() {
     var pinCode = mutableStateOf("")
     var address_2 = mutableStateOf("")
     var show = mutableStateOf(false)
+    var isStateValid by mutableStateOf(false)
 
     fun getLocation(longitude: Double, latitude: Double, context : Context) {
         val geocoder: Geocoder = Geocoder(context, Locale.getDefault())

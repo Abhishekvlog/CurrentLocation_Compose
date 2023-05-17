@@ -14,17 +14,33 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,16 +78,23 @@ class MainActivity : ComponentActivity() {
     }
     val mainViewModel: MainViewModel by viewModels<MainViewModel>()
     val countryViewModel by viewModels<CountryViewModel>()
-    lateinit var stateViewModel : StateViewModel
-    lateinit var cityViewModel : CityViewModel
+    lateinit var stateViewModel: StateViewModel
+    lateinit var cityViewModel: CityViewModel
     lateinit var patientViewModel: PatientViewModel
 
     @SuppressLint("UnrememberedMutableState")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        stateViewModel = ViewModelProvider(this, StateViewModelFactory(db.stateDao)).get(StateViewModel::class.java)
-        cityViewModel = ViewModelProvider(this, CityViewModelFactory(db.cityDao)).get(CityViewModel::class.java)
-        patientViewModel = ViewModelProvider(this, PatientViewModelFactory(db.patientDao)).get(PatientViewModel::class.java)
+        stateViewModel = ViewModelProvider(
+            this,
+            StateViewModelFactory(db.stateDao)
+        ).get(StateViewModel::class.java)
+        cityViewModel =
+            ViewModelProvider(this, CityViewModelFactory(db.cityDao)).get(CityViewModel::class.java)
+        patientViewModel = ViewModelProvider(
+            this,
+            PatientViewModelFactory(db.patientDao)
+        ).get(PatientViewModel::class.java)
 
         setContent {
             var latitude by remember {
@@ -81,10 +104,19 @@ class MainActivity : ComponentActivity() {
                 mutableStateOf(0.0)
             }
 
+            var expand = remember {
+                mutableStateOf(false)
+            }
+            var stateList: MutableList<String> by mutableStateOf(mutableListOf())
+
+            var state = remember {
+                mutableStateOf("")
+            }
+
             CurrentLocationTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colors.background
+                    color = MaterialTheme.colorScheme.background
                 ) {
                     val context = LocalContext.current
                     if (!mainViewModel.show.value) {
@@ -99,9 +131,14 @@ class MainActivity : ComponentActivity() {
                                 longitude = lo.longitude
                                 CoroutineScope(Dispatchers.IO).launch {
                                     delay(2000)
-                                    if (!mainViewModel.show.value){
-                                        mainViewModel.getLocation(longitude, latitude, this@MainActivity)
+                                    if (!mainViewModel.show.value) {
+                                        mainViewModel.getLocation(
+                                            longitude,
+                                            latitude,
+                                            this@MainActivity
+                                        )
                                     }
+                                    state.value = mainViewModel.state.value
                                 }
                             }
                         }
@@ -142,8 +179,8 @@ class MainActivity : ComponentActivity() {
                                 launcherMultiplePermissions.launch(permissions)
                             }
                         }
-                        LaunchedEffect(Unit){
-                            if (stateViewModel.getState().isEmpty()){
+                        LaunchedEffect(Unit) {
+                            if (stateViewModel.getState().isEmpty()) {
                                 Log.d("sizeCheck", "onCreate ${stateViewModel.getState().size}")
                                 countryViewModel.getStates()
                                 countryViewModel.stateLiveData.observe(this@MainActivity) { data ->
@@ -155,15 +192,23 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
-                            if (cityViewModel.getCity().isEmpty()){
+                            if (cityViewModel.getCity().isEmpty()) {
                                 Log.d("sizeCheck", "onCreate ${cityViewModel.getCity().size}")
                                 countryViewModel.getCities()
                                 delay(3000)
-                                countryViewModel.citiesLiveData.observe(this@MainActivity){cities ->
+                                countryViewModel.citiesLiveData.observe(this@MainActivity) { cities ->
                                     cities.forEach {
                                         cityViewModel.insertCity(it)
-                                        Log.d("cities",it )
+                                        Log.d("cities", it)
                                     }
+                                }
+                            }
+                        }
+                        LaunchedEffect(Unit) {
+                            val stateDta = stateViewModel.getState()
+                            if (stateDta.isNotEmpty()) {
+                                stateDta.forEach {
+                                    stateList.add(it.state)
                                 }
                             }
                         }
@@ -219,8 +264,52 @@ class MainActivity : ComponentActivity() {
                                 .padding(start = 12.dp),
                             horizontalArrangement = Arrangement.SpaceAround
                         ) {
-                            EditField(name = mainViewModel.state.value, hint = "State", 0.45f) {
-                                mainViewModel.state.value = it
+                            Box(modifier = Modifier.fillMaxWidth(0.4f)) {
+                             OutlinedTextField(
+                                    value = mainViewModel.state.value,
+                                    onValueChange = {
+                                        mainViewModel.isStateValid = mainViewModel.state.value == ""
+                                    },
+                                    label = { Text(text = "State *") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("State *"),
+                                    readOnly = true,
+                                    interactionSource = remember {
+                                        MutableInteractionSource()
+                                    }.also { interactionSource ->
+                                        LaunchedEffect(interactionSource) {
+                                            interactionSource.interactions.collect {
+                                                if (it is PressInteraction.Release) {
+                                                    expand.value = !expand.value
+                                                }
+                                            }
+                                        }
+                                    },
+                                    trailingIcon = {
+                                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                    },
+                                    isError = mainViewModel.isStateValid,
+                                    supportingText = {
+                                        if (mainViewModel.isStateValid)
+                                            Text(text = "Please select a state.")
+                                    }
+                                )
+                                DropdownMenu(
+                                    modifier = Modifier.fillMaxHeight(0.5f),
+                                    expanded = expand.value,
+                                    onDismissRequest = { expand.value = !expand.value },
+                                ) {
+                                    stateList.forEach { label ->
+                                       androidx.compose.material3.DropdownMenuItem(
+                                           onClick = {
+                                               expand.value = !expand.value
+                                               mainViewModel.state.value= label
+                                           }, text = {
+                                               Text(text = label)
+                                           })
+                                    }
+                                }
                             }
                             EditField(
                                 name = mainViewModel.pinCode.value,
@@ -250,7 +339,7 @@ class MainActivity : ComponentActivity() {
                                 hint = "Address Line 2",
                                 size = 1f
                             ) {
-                                mainViewModel.address_2.value= it
+                                mainViewModel.address_2.value = it
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
@@ -279,13 +368,17 @@ class MainActivity : ComponentActivity() {
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             CardButton(name = "Preview") {
-                                if (!mainViewModel.state.value.isEmpty()){
+                                if (!mainViewModel.state.value.isEmpty()) {
                                     CoroutineScope(Dispatchers.IO).launch {
-                                        val stateId = db.stateDao.getStateId(mainViewModel.state.value)
+                                        val stateId =
+                                            db.stateDao.getStateId(mainViewModel.state.value)
                                         val address = mainViewModel.address_2.value
                                         val cityId = db.cityDao.getCityId(mainViewModel.city.value)
                                         val pinId = mainViewModel.pinCode.value
-                                        Log.d("patientCheck", "onCreate: stateId - $stateId cityId - $cityId")
+                                        Log.d(
+                                            "patientCheck",
+                                            "onCreate: stateId - $stateId cityId - $cityId"
+                                        )
                                         patientViewModel.insertPatientDetails(
                                             pinCodeId = pinId.toInt(),
                                             cityId = cityId.id,
@@ -296,9 +389,9 @@ class MainActivity : ComponentActivity() {
                                         mainViewModel.state.value = ""
                                         mainViewModel.city.value = ""
                                         mainViewModel.address_2.value = ""
-                                        mainViewModel.fullAddress.value =""
-                                        mainViewModel.district.value =""
-                                        lifecycleScope.launch(Dispatchers.Main){
+                                        mainViewModel.fullAddress.value = ""
+                                        mainViewModel.district.value = ""
+                                        lifecycleScope.launch(Dispatchers.Main) {
                                             Toast.makeText(
                                                 this@MainActivity,
                                                 "Patient data saved",
@@ -308,9 +401,7 @@ class MainActivity : ComponentActivity() {
                                         }
 
                                     }
-                                }
-                                else
-                                {
+                                } else {
                                     Toast.makeText(
                                         this@MainActivity,
                                         "Field can't be empty",
@@ -328,6 +419,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
     @SuppressLint("MissingPermission")
     private fun startLocationUpdates() {
         locationCallback?.let {
@@ -350,11 +442,14 @@ class MainActivity : ComponentActivity() {
             startLocationUpdates()
         }
     }
+
     override fun onPause() {
         super.onPause()
         locationCallback?.let { fusedLocationClient?.removeLocationUpdates(it) }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditField(name: String, hint: String, size: Float, update: (String) -> Unit) {
 
@@ -375,23 +470,16 @@ fun EditField(name: String, hint: String, size: Float, update: (String) -> Unit)
     )
 
 }
+
+
 @Composable
 fun CardButton(name: String, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
-        backgroundColor = colorResource(id = R.color.purple),
+    Button(onClick = { onClick()}, modifier = Modifier
+        .fillMaxWidth(),
+        colors = ButtonDefaults.buttonColors(colorResource(id = R.color.purple)),
+    shape = RoundedCornerShape(18.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Bottom
-        ) {
-            Text(text = name, fontSize = 16.sp, color = Color.White)
-        }
+        Text(text = name)
+
     }
 }
-
-
